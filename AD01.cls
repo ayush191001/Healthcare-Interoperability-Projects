@@ -96,7 +96,7 @@ ClassMethod BuildPatient(pid As %String) As %DynamicObject
 {
 
     SET patient = ##class(%DynamicObject).%New()
-
+    Set patient.name = ##class(%DynamicArray).%New()
     SET patient.resourceType = "Patient"
 
     ; 1. Extract PID-3
@@ -120,6 +120,17 @@ ClassMethod BuildPatient(pid As %String) As %DynamicObject
     SET name = ##class(%DynamicObject).%New()
     SET given = ##class(%DynamicArray).%New()
 
+    
+
+    Set givenName = $Piece(patientName,"^",2)
+    Set familyName = $Piece(patientName,"^",1)
+
+    SET name.family = familyName
+    Do given.%Push(givenName)
+    SET name.given = given
+
+    SET patient.name = name
+
     ; YOU write the family/given extraction here
 
     SET patient.identifier = ##class(%DynamicArray).%New()
@@ -128,9 +139,28 @@ ClassMethod BuildPatient(pid As %String) As %DynamicObject
     SET patient.name = ##class(%DynamicArray).%New()
     DO patient.name.%Push(name)
 
-    SET patient.birthDate =dob
-    SET patient.gender =gender
-
+    SET year = $EXTRACT(dob,1,4)
+    SET month = $EXTRACT(dob,5,6)
+    SET day = $EXTRACT(dob,7,8)
+    
+    SET patient.birthDate = year_"-"_month_"-"_day      
+    IF gender = "M" 
+    {
+        SET patient.gender = "male"
+    }
+    ELSEIF gender = "F" 
+    {
+        SET patient.gender = "female"
+    }
+    ELSEIF gender = "O" 
+    {
+        SET patient.gender = "other"
+    }
+    ELSE 
+    {
+    SET patient.gender = "unknown"
+    }
+    
     QUIT patient
 }
 
