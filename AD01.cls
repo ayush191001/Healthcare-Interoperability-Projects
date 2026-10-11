@@ -129,8 +129,6 @@ ClassMethod BuildPatient(pid As %String) As %DynamicObject
     Do given.%Push(givenName)
     SET name.given = given
 
-    SET patient.name = name
-
     ; YOU write the family/given extraction here
 
     SET patient.identifier = ##class(%DynamicArray).%New()
