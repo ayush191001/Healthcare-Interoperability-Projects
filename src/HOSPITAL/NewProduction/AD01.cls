@@ -181,6 +181,154 @@ ClassMethod BuildPatient(pid As %String) As %DynamicObject
     QUIT patient
 }
 
+ClassMethod BuildEncounter(hl7 As %String, patientLocation As %String, Output encounterResource As %DynamicObject) As %Status
+{
+    // Normalize CRLF to CR
+    SET hl7 = $REPLACE(hl7,$CHAR(13,10),$CHAR(13))
+
+    // Find PV1 instead of assuming a fixed segment position
+    SET pv1 = ""
+
+    FOR i = 1:1:$LENGTH(hl7,$CHAR(13)) {
+        SET segment = $PIECE(hl7,$CHAR(13),i)
+
+        IF $PIECE(segment,"|",1)="PV1" {
+            SET pv1 = segment
+            QUIT
+        }
+    }
+
+    IF pv1="" {
+        QUIT $$$ERROR($$$GeneralError,"PV1 segment is missing")
+    }
+
+    // Extract PV1 fields
+    SET patientClass = $PIECE(pv1,"|",3)
+    SET locationCode = $PIECE(pv1,"|",4)
+    SET attendingDoctor = $PIECE(pv1,"|",8)
+    SET visitNumber = $PIECE(pv1,"|",20)
+
+    IF visitNumber="" {
+        QUIT $$$ERROR($$$GeneralError,"PV1-19 visit number is missing")
+    }
+
+    IF locationCode="" {
+        QUIT $$$ERROR($$$GeneralError,"PV1-3 patient location is missing")
+    }
+
+    IF attendingDoctor="" {
+        QUIT $$$ERROR($$$GeneralError,"PV1-7 attending doctor is missing")
+    }
+
+    // Extract the logical Patient ID from the returned Location URL
+    SET patientFHIRID = $PIECE(
+        $PIECE(patientLocation,"Patient/",2),
+        "/",
+        1
+    )
+
+    IF patientFHIRID="" {
+        QUIT $$$ERROR($$$GeneralError,"FHIR Patient ID could not be extracted from Location")
+    }
+
+    // Map the HL7 patient class to FHIR Encounter.class
+    IF patientClass="I" {
+        SET classCode = "IMP"
+        SET classDisplay = "inpatient encounter"
+    }
+    ELSEIF patientClass="O" {
+        SET classCode = "AMB"
+        SET classDisplay = "ambulatory"
+    }
+    ELSEIF patientClass="E" {
+        SET classCode = "EMER"
+        SET classDisplay = "emergency"
+    }
+    ELSE {
+        QUIT $$$ERROR($$$GeneralError,"Unsupported PV1-2 patient class")
+    }
+
+    // Create Encounter
+    SET encounterResource = ##class(%DynamicObject).%New()
+    SET encounterResource.resourceType = "Encounter"
+    SET encounterResource.status = "in-progress"
+
+    // Business identifier: hospital visit number
+    SET identifier = ##class(%DynamicObject).%New()
+    SET identifier.system = "https://hospital.example/visit-number"
+    SET identifier.value = visitNumber
+
+    SET identifiers = ##class(%DynamicArray).%New()
+    DO identifiers.%Push(identifier)
+    SET encounterResource.identifier = identifiers
+
+    // Encounter class
+    SET coding = ##class(%DynamicObject).%New()
+    SET coding.system = "http://terminology.hl7.org/CodeSystem/v3-ActCode"
+    SET coding.code = classCode
+    SET coding.display = classDisplay
+    SET encounterResource.class = coding
+
+    // Link to the Patient returned by the Patient operation
+    SET subject = ##class(%DynamicObject).%New()
+    SET subject.reference = "Patient/"_patientFHIRID
+    SET encounterResource.subject = subject
+
+    // Location: represent the supplied location by its agreed identifier
+    SET locationIdentifier = ##class(%DynamicObject).%New()
+    SET locationIdentifier.system = "https://hospital.example/location"
+    SET locationIdentifier.value = locationCode
+
+    SET locationReference = ##class(%DynamicObject).%New()
+    SET locationReference.identifier = locationIdentifier
+    SET locationReference.display = $TRANSLATE(locationCode,"^"," ")
+
+    SET encounterLocation = ##class(%DynamicObject).%New()
+    SET encounterLocation.location = locationReference
+    SET encounterLocation.status = "active"
+
+    SET locations = ##class(%DynamicArray).%New()
+    DO locations.%Push(encounterLocation)
+    SET encounterResource.location = locations
+
+    // Attending doctor: identifier-based reference
+    SET doctorID = $PIECE(attendingDoctor,"^",1)
+    SET doctorFamily = $PIECE(attendingDoctor,"^",2)
+    SET doctorGiven = $PIECE(attendingDoctor,"^",3)
+
+    SET doctorIdentifier = ##class(%DynamicObject).%New()
+    SET doctorIdentifier.system = "https://hospital.example/practitioner-id"
+    SET doctorIdentifier.value = doctorID
+
+    SET doctorReference = ##class(%DynamicObject).%New()
+    SET doctorReference.identifier = doctorIdentifier
+    SET doctorReference.display = doctorGiven_" "_doctorFamily
+
+    SET participant = ##class(%DynamicObject).%New()
+    SET participant.individual = doctorReference
+
+    SET participants = ##class(%DynamicArray).%New()
+    DO participants.%Push(participant)
+    SET encounterResource.participant = participants
+
+    QUIT $$$OK
+}
+
+ClassMethod BuildEncounterFromMessage(message As EnsLib.HL7.Message, patientLocation As %String, Output encounterJSON As %String) As %Status
+{
+    Set tSC = $$$OK
+
+    Set hl7Text = message.OutputToString("", "", .tSC, "")
+    Quit:$$$ISERR(tSC) tSC
+
+    Set tSC = ..BuildEncounter(hl7Text, patientLocation, .encounterResource)
+    Quit:$$$ISERR(tSC) tSC
+
+    Set encounterJSON = encounterResource.%ToJSON()
+
+    Quit $$$OK
+}
+
 /// BPL Definition
 XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 {
@@ -205,6 +353,25 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
                 <parameter name="MAXLEN" value="32000"/>
             </parameters>
         </property>
+        <property name="FHIREncounterJSON" type="%String">
+            <parameters>
+                <parameter name="MAXLEN" value="32000"/>
+            </parameters>
+        </property>
+
+        <property name="EncounterStatusCode" type="%Integer"/>
+
+        <property name="EncounterResourceLocation" type="%String">
+            <parameters>
+                <parameter name="MAXLEN" value="2048"/>
+            </parameters>
+        </property>
+
+        <property name="EncounterResponseBody" type="%String">
+            <parameters>
+                <parameter name="MAXLEN" value="32000"/>
+            </parameters>
+        </property>
     </context>
 <sequence xend='300' yend='450'>
 <code name='ValidateAndBuildFHIRPatient'>
@@ -218,7 +385,23 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
  ]]>
  </code>
 
-    <trace value='"FHIR Patient JSON generated; length="_$LENGTH(context.FHIRPatientJSON)'/>
+<trace value='"FHIR Patient JSON generated; length="_$LENGTH(context.FHIRPatientJSON)'/>
+<code name="BuildFHIREncounter">
+    <![CDATA[
+        SET tSC = ##class(HOSPITAL.NewProduction.AD01).BuildEncounterFromMessage(
+            request,
+            context.FHIRResourceLocation,
+            .encounterJSON
+        )
+
+        IF $$$ISERR(tSC) {
+            SET status = tSC
+            QUIT
+        }
+
+        SET context.FHIREncounterJSON = encounterJSON
+    ]]>
+</code>
     <call name="PostFHIRPatient" target="FHIRPatientOperation" async="0">
     <request type="HOSPITAL.NewProduction.FHIRPatientRequest">
         <assign property="callrequest.PatientJSON" value="context.FHIRPatientJSON"/>
