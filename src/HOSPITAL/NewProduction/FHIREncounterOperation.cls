@@ -8,48 +8,54 @@ Parameter ADAPTER = "EnsLib.HTTP.OutboundAdapter";
 /// You should replace it and its entry in the MessageMap with your custom operation methods.
 /// See <a href="https://docs.intersystems.com/irislatest/csp/docbook/DocBook.UI.Page.cls?KEY=EGDV_busop#EGDV_busop_message_handlers">the documentation</a>
 /// for tips on how to implement operation methods.
-Method SendEncounter(pRequest As HOSPITAL.NewProduction.FHIREncounterRequest, Output pResponse As HOSPITAL.NewProduction.FHIREncounterResponse) As %Status
+Method SendEncounter(pRequest As HOSPITAL.NewProduction.FHIREncounterRequest,Output pResponse As HOSPITAL.NewProduction.FHIREncounterResponse) As %Status
 {
     Set pResponse = ##class(HOSPITAL.NewProduction.FHIREncounterResponse).%New()
+    Set tSC = $$$OK
 
-    // Parse the FHIR Patient JSON
-   Set tSC = $$$OK
-
-    Try 
-    {
-        Set tPatient = ##class(%DynamicObject).%FromJSON(pRequest.EncounterJSON)
-    }
-    Catch ex 
-    {
-        Set tSC = $$$ERROR($$$GeneralError,"Invalid FHIR Patient JSON")
+    // Parse and validate Encounter JSON
+    Try {
+        Set tEncounter = ##class(%DynamicObject).%FromJSON(pRequest.EncounterJSON)
+    } Catch ex {
+        Set tSC = $$$ERROR($$$GeneralError, "Invalid FHIR Encounter JSON")
     }
 
-    // Get the first business identifier
-    If '$IsObject(tPatient.identifier) {
-        Quit $$$ERROR( $$$GeneralError, "FHIR Patient has no identifier array" )
+    Quit:$$$ISERR(tSC) tSC
+
+    If '$IsObject(tEncounter) {
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter JSON did not produce an object")
     }
 
-    Set tIdentifier = tPatient.identifier.%Get(0)
+    If tEncounter.resourceType '= "Encounter" {
+        Quit $$$ERROR($$$GeneralError, "Resource type must be Encounter")
+    }
+
+    // Read the Encounter business identifier
+    If '$IsObject(tEncounter.identifier) {
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter has no identifier array")
+    }
+
+    Set tIdentifier = tEncounter.identifier.%Get(0)
 
     If '$IsObject(tIdentifier) {
-        Quit $$$ERROR($$$GeneralError, "FHIR Patient identifier is missing")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter identifier is missing")
     }
 
     Set tSystem = tIdentifier.system
     Set tValue = tIdentifier.value
 
-    If tSystem="" {
-        Quit $$$ERROR($$$GeneralError, "Patient identifier system is missing" )
+    If tSystem = "" {
+        Quit $$$ERROR($$$GeneralError, "Encounter identifier system is missing")
     }
 
-    If tValue="" {
-        Quit $$$ERROR( $$$GeneralError,"Patient identifier value is missing")
+    If tValue = "" {
+        Quit $$$ERROR($$$GeneralError, "Encounter identifier value is missing")
     }
 
-    // Build the FHIR conditional-create search criteria
+    // Use conditional create to help prevent duplicate Encounters
     Set tConditionalSearch = "identifier="_tSystem_"|"_tValue
 
-    // Construct an HTTP request with per-message headers
+    // Prepare the HTTP request
     Set tHttpRequest = ##class(%Net.HttpRequest).%New()
 
     Set tBody = ##class(%GlobalBinaryStream).%New()
@@ -59,29 +65,30 @@ Method SendEncounter(pRequest As HOSPITAL.NewProduction.FHIREncounterRequest, Ou
     Set tHttpRequest.EntityBody = tBody
     Set tHttpRequest.ContentType = "application/fhir+json"
 
-    Set tSC = tHttpRequest.SetHeader(
-        "Accept",
-        "application/fhir+json"
-    )
+    Set tSC = tHttpRequest.SetHeader("Accept", "application/fhir+json")
     Quit:$$$ISERR(tSC) tSC
 
-    Set tSC = tHttpRequest.SetHeader(
-        "If-None-Exist",
-        tConditionalSearch
-    )
+    Set tSC = tHttpRequest.SetHeader("If-None-Exist", tConditionalSearch)
     Quit:$$$ISERR(tSC) tSC
 
-    // Send through the configured production HTTP adapter
+    // POST to the URL configured on FHIREncounterOperation
     Set tData = ""
 
-    Set tSC = ..Adapter.SendFormDataArray(.tHttpResponse, "POST", tHttpRequest, "", .tData)
+    Set tSC = ..Adapter.SendFormDataArray(
+        .tHttpResponse,
+        "POST",
+        tHttpRequest,
+        "",
+        .tData
+    )
 
     Quit:$$$ISERR(tSC) tSC
 
     If '$IsObject(tHttpResponse) {
-        Quit $$$ERROR( $$$GeneralError,"HTTP request returned no response object")
+        Quit $$$ERROR($$$GeneralError, "HTTP request returned no response object")
     }
 
+    // Capture the FHIR response
     Set pResponse.FHIRStatusCode = tHttpResponse.StatusCode
     Set pResponse.FHIRStatusLine = tHttpResponse.StatusLine
     Set pResponse.ResourceLocation = tHttpResponse.GetHeader("Location")
@@ -92,9 +99,10 @@ Method SendEncounter(pRequest As HOSPITAL.NewProduction.FHIREncounterRequest, Ou
         Set pResponse.FHIRResponseBody = tHttpResponse.Data.Read(32000)
     }
 
-    // 200 = existing matching resource; 201 = newly created resource
-    If (pResponse.FHIRStatusCode < 200) || (pResponse.FHIRStatusCode > 299) {
-        Quit $$$ERROR($$$GeneralError,"FHIR POST failed: HTTP "_ pResponse.FHIRStatusCode_" "_pResponse.FHIRStatusLine_" "_ $EXTRACT(pResponse.FHIRResponseBody,1,1000))
+    // Accept successful 2xx responses
+    If (pResponse.FHIRStatusCode < 200) ||
+       (pResponse.FHIRStatusCode > 299) {
+        Quit $$$ERROR( $$$GeneralError,"FHIR Encounter POST failed: HTTP "_pResponse.FHIRStatusCode_" "_ pResponse.FHIRStatusLine_" "_$EXTRACT(pResponse.FHIRResponseBody, 1, 1000) )
     }
 
     Quit $$$OK

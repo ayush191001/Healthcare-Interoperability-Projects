@@ -386,23 +386,8 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
  </code>
 
 <trace value='"FHIR Patient JSON generated; length="_$LENGTH(context.FHIRPatientJSON)'/>
-<code name="BuildFHIREncounter">
-    <![CDATA[
-        SET tSC = ##class(HOSPITAL.NewProduction.AD01).BuildEncounterFromMessage(
-            request,
-            context.FHIRResourceLocation,
-            .encounterJSON
-        )
 
-        IF $$$ISERR(tSC) {
-            SET status = tSC
-            QUIT
-        }
-
-        SET context.FHIREncounterJSON = encounterJSON
-    ]]>
-</code>
-    <call name="PostFHIRPatient" target="FHIRPatientOperation" async="0">
+<call name="PostFHIRPatient" target="FHIRPatientOperation" async="0">
     <request type="HOSPITAL.NewProduction.FHIRPatientRequest">
         <assign property="callrequest.PatientJSON" value="context.FHIRPatientJSON"/>
     </request>
@@ -413,7 +398,38 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
     </response>
 </call>
 
-<trace value='"FHIR POST returned HTTP "_context.FHIRStatusCode'/>
+<trace value='"FHIR Patient POST returned HTTP "_context.FHIRStatusCode_"; Location="_context.FHIRResourceLocation'/>
+<code name="BuildFHIREncounter">
+        <![CDATA[
+            IF context.FHIRResourceLocation = "" {
+                SET status = $$$ERROR($$$GeneralError,"Patient FHIR Location is missing; cannot link Encounter")
+                QUIT
+            }
+
+            SET tSC = ##class(HOSPITAL.NewProduction.AD01).BuildEncounterFromMessage(request,context.FHIRResourceLocation,.encounterJSON )
+            IF $$$ISERR(tSC) {
+                SET status = tSC
+                QUIT
+            }
+
+            SET context.FHIREncounterJSON = encounterJSON
+        ]]>
+</code>
+<trace value='"FHIR Encounter JSON generated; length="_$LENGTH(context.FHIREncounterJSON)'/>
+
+    <!-- STEP 3: POST Encounter -->
+ <call name="PostFHIREncounter" target="FHIREncounterOperation" async="0">
+    <request type="HOSPITAL.NewProduction.FHIREncounterRequest">
+        <assign property="callrequest.EncounterJSON" value="context.FHIREncounterJSON"/>
+    </request>
+    <response type="HOSPITAL.NewProduction.FHIREncounterResponse">
+        <assign property="context.EncounterStatusCode" value="callresponse.FHIRStatusCode"/>
+        <assign property="context.EncounterResourceLocation" value="callresponse.ResourceLocation"/>
+        <assign property="context.EncounterResponseBody"  value="callresponse.FHIRResponseBody"/>
+    </response>
+</call>
+<trace value='"FHIR Encounter POST returned HTTP "_context.EncounterStatusCode_"; Location="_context.EncounterResourceLocation'/>
+
 </sequence>
 </process>
 }
