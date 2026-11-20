@@ -35,6 +35,8 @@ XData ProductionDefinition
   </Item>
   <Item Name="HOSPITAL.NewProduction.AD01" Category="ADT_FHIR_Process" ClassName="HOSPITAL.NewProduction.AD01" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
   </Item>
+  <Item Name="HOSPITAL.NewProduction.AD03" Category="ADT_FHIR_Process" ClassName="HOSPITAL.NewProduction.AD03" PoolSize="1" Enabled="false" Foreground="false" Comment="ADT A03 discharge processing; enable after routing and FHIR update tests" LogTraceEvents="true" Schedule="">
+  </Item>
   <Item Name="FHIRPatientOperation" Category="" ClassName="HOSPITAL.NewProduction.FHIRPatientOperation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="false" Schedule="">
     <Setting Target="Adapter" Name="ExtraHeaders">Content-Type:application/fhir+json,Accept:application/fhir+json</Setting>
     <Setting Target="Adapter" Name="HTTPPort">443</Setting>
