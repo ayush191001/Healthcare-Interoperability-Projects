@@ -193,11 +193,13 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         Quit $$$ERROR($$$GeneralError, "FHIR Encounter search failed: HTTP "_pResponse.FHIRStatusCode_" "_pResponse.FHIRStatusLine_" "_$EXTRACT(pResponse.FHIRResponseBody,1,1000))
     }
 
+    Set tSC = $$OK
     Try {
         Set tBundle = ##class(%DynamicObject).%FromJSON(pResponse.FHIRResponseBody)
     } Catch ex {
-        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search returned invalid JSON")
+        Set tSC = $$ERROR($$GeneralError, "FHIR Encounter search returned invalid JSON")
     }
+    Quit:$$ISERR(tSC) tSC
 
     If '$IsObject(tBundle) || (tBundle.resourceType '= "Bundle") {
         Quit $$$ERROR($$$GeneralError, "FHIR Encounter search did not return a Bundle")
