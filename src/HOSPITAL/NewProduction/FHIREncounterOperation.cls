@@ -125,36 +125,62 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time is missing")
     }
 
-    // Convert the HL7 TS value to a FHIR dateTime. An absent timezone means IST.
+    // Convert HL7 TS (YYYYMMDD[HH[MM[SS]]][+/-ZZZZ]) to FHIR dateTime.
+    // A missing timezone on a time-bearing value is interpreted as IST (+05:30).
     Set tHL7Time = pRequest.DischargeDateTime
-    Set tDigits = $TRANSLATE(tHL7Time, "+-.", "")
-    If $LENGTH(tDigits) < 8 {
-        Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time is invalid")
+    Set tCoreTime = tHL7Time
+    Set tZone = ""
+
+    // Extract an explicit timezone only when the final five characters are +/-ZZZZ.
+    If $LENGTH(tHL7Time) >= 13 {
+        Set tTail = $EXTRACT(tHL7Time,*-4,*)
+        If ($EXTRACT(tTail,1) = "+") || ($EXTRACT(tTail,1) = "-") {
+            Set tZone = $EXTRACT(tTail,1)_$EXTRACT(tTail,2,3)_":"_$EXTRACT(tTail,4,5)
+            Set tCoreTime = $EXTRACT(tHL7Time,1,*-5)
+        }
     }
-    Set tYear = $EXTRACT(tDigits,1,4)
-    Set tMonth = $EXTRACT(tDigits,5,6)
-    Set tDay = $EXTRACT(tDigits,7,8)
+
+    // Fractional seconds are deliberately rejected rather than silently truncated.
+    If $FIND(tCoreTime,".") {
+        Quit $$$ERROR($$$GeneralError, "Fractional seconds in A03 discharge time are not supported")
+    }
+
+    Set tTimeLength = $LENGTH(tCoreTime)
+    If (tTimeLength '= 8) && (tTimeLength '= 10) && (tTimeLength '= 12) && (tTimeLength '= 14) {
+        Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time must contain YYYYMMDD, optional HHMMSS, and optional +/-ZZZZ")
+    }
+    If $TRANSLATE(tCoreTime,"0123456789","") '= "" {
+        Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time contains non-numeric date/time characters")
+    }
+
+    Set tYear = $EXTRACT(tCoreTime,1,4)
+    Set tMonth = $EXTRACT(tCoreTime,5,6)
+    Set tDay = $EXTRACT(tCoreTime,7,8)
+    If (tMonth < 1) || (tMonth > 12) || (tDay < 1) || (tDay > 31) {
+        Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time contains an invalid month or day")
+    }
     Set tFHIRTime = tYear_"-"_tMonth_"-"_tDay
 
-    If $LENGTH(tDigits) >= 10 {
-        Set tHour = $EXTRACT(tDigits,9,10)
-        Set tMinute = $EXTRACT(tDigits,11,12)
-        If tHour = "" Set tHour = "00"
-        If tMinute = "" Set tMinute = "00"
+    If tTimeLength > 8 {
+        Set tHour = $EXTRACT(tCoreTime,9,10)
+        Set tMinute = "00"
         Set tSecond = "00"
-        If $LENGTH(tDigits) >= 14 Set tSecond = $EXTRACT(tDigits,13,14)
-        Set tFHIRTime = tFHIRTime_"T"_tHour_":"_tMinute_":"_tSecond
-
-        // Preserve an explicit HL7 timezone; otherwise use India Standard Time.
-        Set tZone = ""
-        If $LENGTH(tHL7Time) >= 5 {
-            Set tTail = $EXTRACT(tHL7Time,*-4,*)
-            If ($EXTRACT(tTail,1) = "+") || ($EXTRACT(tTail,1) = "-") {
-                Set tZone = $EXTRACT(tTail,1,3)_":"_$EXTRACT(tTail,4,5)
-            }
+        If tTimeLength >= 12 Set tMinute = $EXTRACT(tCoreTime,11,12)
+        If tTimeLength = 14 Set tSecond = $EXTRACT(tCoreTime,13,14)
+        If (tHour > 23) || (tMinute > 59) || (tSecond > 59) {
+            Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time contains an invalid time")
         }
+
         If tZone = "" Set tZone = "+05:30"
-        Set tFHIRTime = tFHIRTime_tZone
+        Set tZoneHour = $EXTRACT(tZone,2,3)
+        Set tZoneMinute = $EXTRACT(tZone,5,6)
+        If (tZoneHour > 14) || (tZoneMinute > 59) || ((tZoneHour = 14) && (tZoneMinute '= 0)) {
+            Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time contains an invalid timezone offset")
+        }
+
+        Set tFHIRTime = tFHIRTime_"T"_tHour_":"_tMinute_":"_tSecond_tZone
+    } ElseIf (tZone '= "") {
+        Quit $$$ERROR($$$GeneralError, "A timezone offset is not valid without a time component")
     }
 
     // Search by both the hospital visit identifier and the Patient identifier.
@@ -248,7 +274,76 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
     Set tSubjectReference = tSubject.%Get("reference")
     If $EXTRACT(tSubjectReference,1,8) '= "Patient/" {
-        Quit $$$ERROR($$$GeneralError, "Returned Encounter has an invalid Patient subject reference")
+        Quit $$ERROR($$GeneralError, "Returned Encounter has an invalid Patient subject reference")
+    }
+
+    // Resolve the A03 MRN to exactly one FHIR Patient and compare its id to Encounter.subject.
+    Set tEncounterURL = ..Adapter.URL
+    If $EXTRACT(tEncounterURL,*) = "/" {
+        Set tEncounterURL = $EXTRACT(tEncounterURL,1,$LENGTH(tEncounterURL)-1)
+    }
+    If $EXTRACT(tEncounterURL,*-$LENGTH("/Encounter")+1,*) '= "/Encounter" {
+        Quit $$ERROR($$GeneralError, "Configured Encounter URL must end with /Encounter to resolve the Patient endpoint")
+    }
+    Set tPatientURL = $EXTRACT(tEncounterURL,1,$LENGTH(tEncounterURL)-$LENGTH("/Encounter"))_"/Patient"
+
+    Set tPatientRequest = ##class(%Net.HttpRequest).%New()
+    Set tSC = tPatientRequest.SetHeader("Accept", "application/fhir+json")
+    Quit:$$ISERR(tSC) tSC
+    Set tPatientData(1) = "https://hospital.example/mrn|"_pRequest.PatientIdentifier
+    Set tPatientData(2) = "2"
+    Set tSC = ..Adapter.SendFormDataArray(
+        .tPatientResponse,
+        "GET",
+        tPatientRequest,
+        "identifier,_count",
+        .tPatientData,
+        tPatientURL
+    )
+    Quit:$$ISERR(tSC) tSC
+    If '$IsObject(tPatientResponse) {
+        Quit $$ERROR($$GeneralError, "FHIR Patient search returned no HTTP response")
+    }
+    If (tPatientResponse.StatusCode < 200) || (tPatientResponse.StatusCode > 299) {
+        Quit $$ERROR($$GeneralError, "FHIR Patient search failed: HTTP "_tPatientResponse.StatusCode_" "_tPatientResponse.StatusLine)
+    }
+    Set tPatientBody = ""
+    If $IsObject(tPatientResponse.Data) {
+        Do tPatientResponse.Data.Rewind()
+        Set tPatientBody = tPatientResponse.Data.Read(32000)
+    }
+    Set tSC = $$OK
+    Try {
+        Set tPatientBundle = ##class(%DynamicObject).%FromJSON(tPatientBody)
+    } Catch ex {
+        Set tSC = $$ERROR($$GeneralError, "FHIR Patient search returned invalid JSON")
+    }
+    Quit:$$ISERR(tSC) tSC
+    If '$IsObject(tPatientBundle) || (tPatientBundle.%Get("resourceType") '= "Bundle") {
+        Quit $$ERROR($$GeneralError, "FHIR Patient search did not return a Bundle")
+    }
+    Set tPatientEntryCount = 0
+    If $IsObject(tPatientBundle.%Get("entry")) {
+        Set tPatientEntryCount = tPatientBundle.entry.%Size()
+    }
+    Set tPatientTotal = tPatientBundle.%Get("total",tPatientEntryCount)
+    If (tPatientTotal > 1) || (tPatientEntryCount > 1) {
+        Quit $$ERROR($$GeneralError, "Multiple FHIR Patients match the A03 MRN; no Encounter update was made")
+    }
+    If (tPatientTotal = 0) || (tPatientEntryCount = 0) {
+        Quit $$ERROR($$GeneralError, "No FHIR Patient matches the A03 MRN; no Encounter update was made")
+    }
+    Set tPatientEntry = tPatientBundle.entry.%Get(0)
+    If '$IsObject(tPatientEntry) || '$IsObject(tPatientEntry.%Get("resource")) {
+        Quit $$ERROR($$GeneralError, "FHIR Patient search result has no resource")
+    }
+    Set tPatientResource = tPatientEntry.resource
+    If tPatientResource.%Get("resourceType") '= "Patient" {
+        Quit $$ERROR($$GeneralError, "FHIR Patient search returned a non-Patient resource")
+    }
+    Set tPatientID = tPatientResource.%Get("id")
+    If (tPatientID = "") || (tSubjectReference '= ("Patient/"_tPatientID)) {
+        Quit $$ERROR($$GeneralError, "Encounter.subject does not match the Patient resolved from the A03 MRN")
     }
 
     // A repeated A03 is accepted only when the stored discharge time is identical.
