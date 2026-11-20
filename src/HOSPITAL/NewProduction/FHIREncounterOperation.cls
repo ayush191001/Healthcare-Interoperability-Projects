@@ -178,7 +178,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
             Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time contains an invalid timezone offset")
         }
 
-        Set tFHIRTime = tFHIRTime_"T"_tHour_":"_tMinute_":"_tSecond_tZone
+        Set tFHIRTime = tFHIRTime_"T"_tHour_":"_tMinute_":"_tSecond_""_tZone
     } ElseIf (tZone '= "") {
         Quit $$$ERROR($$$GeneralError, "A timezone offset is not valid without a time component")
     }
@@ -339,7 +339,22 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
     Set tPatientResource = tPatientEntry.resource
     If tPatientResource.%Get("resourceType") '= "Patient" {
-        Quit $$$ERROR($$$GeneralError, "FHIR Patient search returned a non-Patient resource")
+        Quit $$ERROR($$GeneralError, "FHIR Patient search returned a non-Patient resource")
+    }
+    Set tPatientIdentifierFound = 0
+    If $IsObject(tPatientResource.%Get("identifier")) {
+        For j = 0:1:tPatientResource.identifier.%Size()-1 {
+            Set tPatientIdentifier = tPatientResource.identifier.%Get(j)
+            If $IsObject(tPatientIdentifier) {
+                If (tPatientIdentifier.%Get("system") = "https://hospital.example/mrn") &&
+                   (tPatientIdentifier.%Get("value") = pRequest.PatientIdentifier) {
+                    Set tPatientIdentifierFound = 1
+                }
+            }
+        }
+    }
+    If 'tPatientIdentifierFound {
+        Quit $$ERROR($$GeneralError, "Resolved FHIR Patient does not contain the exact A03 MRN")
     }
     Set tPatientID = tPatientResource.%Get("id")
     If (tPatientID = "") || (tSubjectReference '= ("Patient/"_tPatientID)) {
