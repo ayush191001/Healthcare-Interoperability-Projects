@@ -75,7 +75,7 @@ function Send-HL7Mllp {
         $ackText = $ackText -replace ([char]28), ""
         Write-Host "ACK received:" -ForegroundColor Cyan
         Write-Host $ackText
-        if ($ackText -match "(?m)^MSA\|([AR]E|CR|CE)\|") {
+        if ($ackText -match "(?m)^MSA\|(AE|AR|CE|CR)\|") {
             Write-Warning "The receiver returned a negative/error ACK. Review MSA-1 and MSA-3."
         }
     }
