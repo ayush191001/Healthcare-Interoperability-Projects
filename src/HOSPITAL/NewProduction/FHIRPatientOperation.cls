@@ -21,13 +21,13 @@ Method SendPatient(pRequest As HOSPITAL.NewProduction.FHIRPatientRequest, Output
     }
     Catch ex 
     {
-        Set tSC = $$ERROR($$GeneralError,"Invalid FHIR Patient JSON")
+        Set tSC = $$$ERROR($$$GeneralError,"Invalid FHIR Patient JSON")
     }
 
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
 
     If '$IsObject(tPatient) {
-        Quit $$ERROR($$GeneralError,"FHIR Patient JSON did not produce an object")
+        Quit $$$ERROR($$$GeneralError,"FHIR Patient JSON did not produce an object")
     }
 
     // Get the first business identifier
@@ -80,7 +80,7 @@ Method SendPatient(pRequest As HOSPITAL.NewProduction.FHIRPatientRequest, Output
     // Send through the configured production HTTP adapter
     Set tData = ""
 
-    Set tSC = ..Adapter.SendFormDataArray(.tHttpResponse, "POST", tHttpRequest, "", .tData, ..URL)
+    Set tSC = ..Adapter.SendFormDataArray(.tHttpResponse, "POST", tHttpRequest, "", .tData, ..Adapter.URL)
 
     Quit:$$$ISERR(tSC) tSC
 

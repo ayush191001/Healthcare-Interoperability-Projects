@@ -80,7 +80,7 @@ Method SendEncounter(pRequest As HOSPITAL.NewProduction.FHIREncounterRequest,Out
         tHttpRequest,
         "",
         .tData,
-        ..URL
+        ..Adapter.URL
     )
 
     Quit:$$$ISERR(tSC) tSC
