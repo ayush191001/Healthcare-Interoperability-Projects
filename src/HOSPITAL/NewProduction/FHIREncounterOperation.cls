@@ -116,20 +116,20 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set pResponse = ##class(HOSPITAL.NewProduction.FHIREncounterResponse).%New()
 
     If pRequest.PatientIdentifier = "" {
-        Quit $$ERROR($$GeneralError, "A03 Patient Identifier is missing")
+        Quit $$$ERROR($$$GeneralError, "A03 Patient Identifier is missing")
     }
     If pRequest.VisitNumber = "" {
-        Quit $$ERROR($$GeneralError, "A03 Visit Number is missing")
+        Quit $$$ERROR($$$GeneralError, "A03 Visit Number is missing")
     }
     If pRequest.DischargeDateTime = "" {
-        Quit $$ERROR($$GeneralError, "A03 Discharge Date/Time is missing")
+        Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time is missing")
     }
 
     // Convert the HL7 TS value to a FHIR dateTime. An absent timezone means IST.
     Set tHL7Time = pRequest.DischargeDateTime
     Set tDigits = $TRANSLATE(tHL7Time, "+-.", "")
     If $LENGTH(tDigits) < 8 {
-        Quit $$ERROR($$GeneralError, "A03 Discharge Date/Time is invalid")
+        Quit $$$ERROR($$$GeneralError, "A03 Discharge Date/Time is invalid")
     }
     Set tYear = $EXTRACT(tDigits,1,4)
     Set tMonth = $EXTRACT(tDigits,5,6)
@@ -160,7 +160,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     // Search by both the hospital visit identifier and the Patient identifier.
     Set tHttpRequest = ##class(%Net.HttpRequest).%New()
     Set tSC = tHttpRequest.SetHeader("Accept", "application/fhir+json")
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
 
     Set tData(1) = "https://hospital.example/visit-number|"_pRequest.VisitNumber
     Set tData(2) = "https://hospital.example/mrn|"_pRequest.PatientIdentifier
@@ -174,10 +174,10 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         .tData,
         ..Adapter.URL
     )
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
 
     If '$IsObject(tHttpResponse) {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter search returned no HTTP response")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search returned no HTTP response")
     }
 
     Set pResponse.FHIRStatusCode = tHttpResponse.StatusCode
@@ -190,36 +190,36 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
 
     If (pResponse.FHIRStatusCode < 200) || (pResponse.FHIRStatusCode > 299) {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter search failed: HTTP "_pResponse.FHIRStatusCode_" "_pResponse.FHIRStatusLine_" "_$EXTRACT(pResponse.FHIRResponseBody,1,1000))
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search failed: HTTP "_pResponse.FHIRStatusCode_" "_pResponse.FHIRStatusLine_" "_$EXTRACT(pResponse.FHIRResponseBody,1,1000))
     }
 
     Try {
         Set tBundle = ##class(%DynamicObject).%FromJSON(pResponse.FHIRResponseBody)
     } Catch ex {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter search returned invalid JSON")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search returned invalid JSON")
     }
 
     If '$IsObject(tBundle) || (tBundle.resourceType '= "Bundle") {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter search did not return a Bundle")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search did not return a Bundle")
     }
 
     If '$IsObject(tBundle.entry) {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter search Bundle has no entry array")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search Bundle has no entry array")
     }
 
     Set tEntryCount = tBundle.entry.%Size()
     Set tTotal = tBundle.%Get("total", tEntryCount)
 
     If (tTotal > 1) || (tEntryCount > 1) {
-        Quit $$ERROR($$GeneralError, "Multiple FHIR Encounters match this Patient and Visit Number; no update was made")
+        Quit $$$ERROR($$$GeneralError, "Multiple FHIR Encounters match this Patient and Visit Number; no update was made")
     }
     If (tTotal = 0) || (tEntryCount = 0) {
-        Quit $$ERROR($$GeneralError, "No existing FHIR Encounter matches this Patient and Visit Number; no Encounter was created")
+        Quit $$$ERROR($$$GeneralError, "No existing FHIR Encounter matches this Patient and Visit Number; no Encounter was created")
     }
 
     Set tEntry = tBundle.entry.%Get(0)
     If '$IsObject(tEntry) || '$IsObject(tEntry.resource) {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter search result has no resource")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search result has no resource")
     }
     Set tEncounter = tEntry.resource
 
@@ -237,16 +237,16 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         }
     }
     If 'tIdentifierFound {
-        Quit $$ERROR($$GeneralError, "Returned Encounter does not contain the expected visit identifier")
+        Quit $$$ERROR($$$GeneralError, "Returned Encounter does not contain the expected visit identifier")
     }
 
     Set tSubject = tEncounter.%Get("subject")
     If '$IsObject(tSubject) {
-        Quit $$ERROR($$GeneralError, "Returned Encounter has no Patient subject reference")
+        Quit $$$ERROR($$$GeneralError, "Returned Encounter has no Patient subject reference")
     }
     Set tSubjectReference = tSubject.%Get("reference")
     If $EXTRACT(tSubjectReference,1,8) '= "Patient/" {
-        Quit $$ERROR($$GeneralError, "Returned Encounter has an invalid Patient subject reference")
+        Quit $$$ERROR($$$GeneralError, "Returned Encounter has an invalid Patient subject reference")
     }
 
     // A repeated A03 is accepted only when the stored discharge time is identical.
@@ -256,13 +256,13 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
             Set pResponse.FHIRStatusCode = 200
             Set pResponse.FHIRStatusLine = "200 OK - discharge already applied"
             Set pResponse.FHIRResponseBody = tEncounter.%ToJSON()
-            Quit $$OK
+            Quit $$$OK
         }
-        Quit $$ERROR($$GeneralError, "Encounter is already finished with different discharge details")
+        Quit $$$ERROR($$$GeneralError, "Encounter is already finished with different discharge details")
     }
 
     If tEncounter.%Get("status") '= "in-progress" {
-        Quit $$ERROR($$GeneralError, "Only an in-progress Encounter can be discharged")
+        Quit $$$ERROR($$$GeneralError, "Only an in-progress Encounter can be discharged")
     }
 
     // Preserve all other Encounter content and update only status and period.end.
@@ -277,7 +277,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     // PUT the updated resource to its logical FHIR endpoint.
     Set tID = tEncounter.%Get("id")
     If tID = "" {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter logical id is missing")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter logical id is missing")
     }
 
     Set tURL = ..Adapter.URL
@@ -291,7 +291,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set tPutRequest.EntityBody = tBody
     Set tPutRequest.ContentType = "application/fhir+json"
     Set tSC = tPutRequest.SetHeader("Accept", "application/fhir+json")
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
 
     // Use optimistic concurrency when the server supplied a version id.
     Set tMeta = tEncounter.%Get("meta")
@@ -299,7 +299,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         Set tVersion = tMeta.%Get("versionId")
         If tVersion '= "" {
             Set tSC = tPutRequest.SetHeader("If-Match", "W/"""_tVersion_"""")
-            Quit:$$ISERR(tSC) tSC
+            Quit:$$$ISERR(tSC) tSC
         }
     }
 
@@ -312,10 +312,10 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         .tData,
         tURL
     )
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
 
     If '$IsObject(tPutResponse) {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter update returned no HTTP response")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter update returned no HTTP response")
     }
 
     Set pResponse.FHIRStatusCode = tPutResponse.StatusCode
@@ -328,10 +328,10 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
 
     If (pResponse.FHIRStatusCode < 200) || (pResponse.FHIRStatusCode > 299) {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter PUT failed: HTTP "_pResponse.FHIRStatusCode_" "_pResponse.FHIRStatusLine_" "_$EXTRACT(pResponse.FHIRResponseBody,1,1000))
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter PUT failed: HTTP "_pResponse.FHIRStatusCode_" "_pResponse.FHIRStatusLine_" "_$EXTRACT(pResponse.FHIRResponseBody,1,1000))
     }
 
-    Quit $$OK
+    Quit $$$OK
 }
 
 XData MessageMap
