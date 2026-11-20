@@ -339,7 +339,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
     Set tPatientResource = tPatientEntry.resource
     If tPatientResource.%Get("resourceType") '= "Patient" {
-        Quit $$ERROR($$GeneralError, "FHIR Patient search returned a non-Patient resource")
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search returned a non-Patient resource")
     }
     Set tPatientIdentifierFound = 0
     If $IsObject(tPatientResource.%Get("identifier")) {
@@ -354,7 +354,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         }
     }
     If 'tPatientIdentifierFound {
-        Quit $$ERROR($$GeneralError, "Resolved FHIR Patient does not contain the exact A03 MRN")
+        Quit $$$ERROR($$$GeneralError, "Resolved FHIR Patient does not contain the exact A03 MRN")
     }
     Set tPatientID = tPatientResource.%Get("id")
     If (tPatientID = "") || (tSubjectReference '= ("Patient/"_tPatientID)) {
