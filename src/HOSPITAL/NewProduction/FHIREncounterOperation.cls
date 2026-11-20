@@ -219,13 +219,13 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         Quit $$$ERROR($$$GeneralError, "FHIR Encounter search failed: HTTP "_pResponse.FHIRStatusCode_" "_pResponse.FHIRStatusLine_" "_$EXTRACT(pResponse.FHIRResponseBody,1,1000))
     }
 
-    Set tSC = $$OK
+    Set tSC = $$$OK
     Try {
         Set tBundle = ##class(%DynamicObject).%FromJSON(pResponse.FHIRResponseBody)
     } Catch ex {
-        Set tSC = $$ERROR($$GeneralError, "FHIR Encounter search returned invalid JSON")
+        Set tSC = $$$ERROR($$$GeneralError, "FHIR Encounter search returned invalid JSON")
     }
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
 
     If '$IsObject(tBundle) || (tBundle.resourceType '= "Bundle") {
         Quit $$$ERROR($$$GeneralError, "FHIR Encounter search did not return a Bundle")
@@ -274,7 +274,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
     Set tSubjectReference = tSubject.%Get("reference")
     If $EXTRACT(tSubjectReference,1,8) '= "Patient/" {
-        Quit $$ERROR($$GeneralError, "Returned Encounter has an invalid Patient subject reference")
+        Quit $$$ERROR($$$GeneralError, "Returned Encounter has an invalid Patient subject reference")
     }
 
     // Resolve the A03 MRN to exactly one FHIR Patient and compare its id to Encounter.subject.
@@ -283,13 +283,13 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         Set tEncounterURL = $EXTRACT(tEncounterURL,1,$LENGTH(tEncounterURL)-1)
     }
     If $EXTRACT(tEncounterURL,*-$LENGTH("/Encounter")+1,*) '= "/Encounter" {
-        Quit $$ERROR($$GeneralError, "Configured Encounter URL must end with /Encounter to resolve the Patient endpoint")
+        Quit $$$ERROR($$$GeneralError, "Configured Encounter URL must end with /Encounter to resolve the Patient endpoint")
     }
     Set tPatientURL = $EXTRACT(tEncounterURL,1,$LENGTH(tEncounterURL)-$LENGTH("/Encounter"))_"/Patient"
 
     Set tPatientRequest = ##class(%Net.HttpRequest).%New()
     Set tSC = tPatientRequest.SetHeader("Accept", "application/fhir+json")
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
     Set tPatientData(1) = "https://hospital.example/mrn|"_pRequest.PatientIdentifier
     Set tPatientData(2) = "2"
     Set tSC = ..Adapter.SendFormDataArray(
@@ -300,27 +300,27 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
         .tPatientData,
         tPatientURL
     )
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
     If '$IsObject(tPatientResponse) {
-        Quit $$ERROR($$GeneralError, "FHIR Patient search returned no HTTP response")
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search returned no HTTP response")
     }
     If (tPatientResponse.StatusCode < 200) || (tPatientResponse.StatusCode > 299) {
-        Quit $$ERROR($$GeneralError, "FHIR Patient search failed: HTTP "_tPatientResponse.StatusCode_" "_tPatientResponse.StatusLine)
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search failed: HTTP "_tPatientResponse.StatusCode_" "_tPatientResponse.StatusLine)
     }
     Set tPatientBody = ""
     If $IsObject(tPatientResponse.Data) {
         Do tPatientResponse.Data.Rewind()
         Set tPatientBody = tPatientResponse.Data.Read(32000)
     }
-    Set tSC = $$OK
+    Set tSC = $$$OK
     Try {
         Set tPatientBundle = ##class(%DynamicObject).%FromJSON(tPatientBody)
     } Catch ex {
-        Set tSC = $$ERROR($$GeneralError, "FHIR Patient search returned invalid JSON")
+        Set tSC = $$$ERROR($$$GeneralError, "FHIR Patient search returned invalid JSON")
     }
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
     If '$IsObject(tPatientBundle) || (tPatientBundle.%Get("resourceType") '= "Bundle") {
-        Quit $$ERROR($$GeneralError, "FHIR Patient search did not return a Bundle")
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search did not return a Bundle")
     }
     Set tPatientEntryCount = 0
     If $IsObject(tPatientBundle.%Get("entry")) {
@@ -328,22 +328,22 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
     Set tPatientTotal = tPatientBundle.%Get("total",tPatientEntryCount)
     If (tPatientTotal > 1) || (tPatientEntryCount > 1) {
-        Quit $$ERROR($$GeneralError, "Multiple FHIR Patients match the A03 MRN; no Encounter update was made")
+        Quit $$$ERROR($$$GeneralError, "Multiple FHIR Patients match the A03 MRN; no Encounter update was made")
     }
     If (tPatientTotal = 0) || (tPatientEntryCount = 0) {
-        Quit $$ERROR($$GeneralError, "No FHIR Patient matches the A03 MRN; no Encounter update was made")
+        Quit $$$ERROR($$$GeneralError, "No FHIR Patient matches the A03 MRN; no Encounter update was made")
     }
     Set tPatientEntry = tPatientBundle.entry.%Get(0)
     If '$IsObject(tPatientEntry) || '$IsObject(tPatientEntry.%Get("resource")) {
-        Quit $$ERROR($$GeneralError, "FHIR Patient search result has no resource")
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search result has no resource")
     }
     Set tPatientResource = tPatientEntry.resource
     If tPatientResource.%Get("resourceType") '= "Patient" {
-        Quit $$ERROR($$GeneralError, "FHIR Patient search returned a non-Patient resource")
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search returned a non-Patient resource")
     }
     Set tPatientID = tPatientResource.%Get("id")
     If (tPatientID = "") || (tSubjectReference '= ("Patient/"_tPatientID)) {
-        Quit $$ERROR($$GeneralError, "Encounter.subject does not match the Patient resolved from the A03 MRN")
+        Quit $$$ERROR($$$GeneralError, "Encounter.subject does not match the Patient resolved from the A03 MRN")
     }
 
     // A repeated A03 is accepted only when the stored discharge time is identical.
