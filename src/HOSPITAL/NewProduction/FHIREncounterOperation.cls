@@ -281,7 +281,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     }
 
     Set tURL = ..Adapter.URL
-    If $EXTRACT(tURL,*) = "/" Set tURL = $EXTRACT(tURL,1,*-1)
+    If $EXTRACT(tURL,*) = "/" Set tURL = $EXTRACT(tURL,1,$LENGTH(tURL)-1)
     Set tURL = tURL_"/"_tID
 
     Set tPutRequest = ##class(%Net.HttpRequest).%New()
