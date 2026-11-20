@@ -117,6 +117,14 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 
         <property name="MessageControlID" type="%String"/>
 
+        <property name="FHIRStatusCode" type="%Integer"/>
+
+        <property name="FHIRStatusLine" type="%String"/>
+
+        <property name="FHIRResourceLocation" type="%String"/>
+
+        <property name="FHIRResponseBody" type="%String"/>
+
     </context>
 
     <sequence xend='300' yend='300'>
@@ -147,6 +155,23 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
         <trace value='"Visit Number="_context.VisitNumber'/>
 
         <trace value='"Discharge DateTime="_context.DischargeDateTime'/>
+
+        <call name="DischargeFHIREncounter" target="FHIREncounterOperation" async="0">
+            <request type="HOSPITAL.NewProduction.FHIRDischargeRequest">
+                <assign property="callrequest.PatientIdentifier" value="context.PatientIdentifier"/>
+                <assign property="callrequest.VisitNumber" value="context.VisitNumber"/>
+                <assign property="callrequest.DischargeDateTime" value="context.DischargeDateTime"/>
+                <assign property="callrequest.MessageControlID" value="context.MessageControlID"/>
+            </request>
+            <response type="HOSPITAL.NewProduction.FHIREncounterResponse">
+                <assign property="context.FHIRStatusCode" value="callresponse.FHIRStatusCode"/>
+                <assign property="context.FHIRStatusLine" value="callresponse.FHIRStatusLine"/>
+                <assign property="context.FHIRResourceLocation" value="callresponse.ResourceLocation"/>
+                <assign property="context.FHIRResponseBody" value="callresponse.FHIRResponseBody"/>
+            </response>
+        </call>
+
+        <trace value='"A03 FHIR Encounter discharge completed; HTTP "_context.FHIRStatusCode_" "_context.FHIRStatusLine'/>
 
     </sequence>
 
