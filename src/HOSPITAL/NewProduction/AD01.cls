@@ -49,7 +49,7 @@ ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject
     ; PID validation
     ; -----------------------------
     
-    SET patientID = $PIECE(pid,"|",4)
+    SET patientID = $PIECE($PIECE(pid,"|",4),"^",1)
     SET patientName = $PIECE(pid,"|",6)
     SET dob = $PIECE(pid,"|",8)
     SET gender = $PIECE(pid,"|",9)
@@ -119,7 +119,7 @@ ClassMethod BuildPatient(pid As %String) As %DynamicObject
     SET patient.resourceType = "Patient"
 
     ; 1. Extract PID-3
-    SET patientID = $PIECE(pid,"|",4)
+    SET patientID = $PIECE($PIECE(pid,"|",4),"^",1)
 
     ; 2. Extract PID-5
     SET patientName = $PIECE(pid,"|",6)
