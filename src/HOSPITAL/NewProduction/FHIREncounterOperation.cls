@@ -185,6 +185,8 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
 
     // Search by both the hospital visit identifier and the Patient identifier.
     Set tHttpRequest = ##class(%Net.HttpRequest).%New()
+    Set tHttpRequest.Https = 1
+    Set tHttpRequest.SSLConfiguration = ..Adapter.SSLConfig
     Set tSC = tHttpRequest.SetHeader("Accept", "application/fhir+json")
     Quit:$$$ISERR(tSC) tSC
 
@@ -288,6 +290,8 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set tPatientURL = $EXTRACT(tEncounterURL,1,$LENGTH(tEncounterURL)-$LENGTH("/Encounter"))_"/Patient"
 
     Set tPatientRequest = ##class(%Net.HttpRequest).%New()
+    Set tPatientRequest.Https = 1
+    Set tPatientRequest.SSLConfiguration = ..Adapter.SSLConfig
     Set tSC = tPatientRequest.SetHeader("Accept", "application/fhir+json")
     Quit:$$$ISERR(tSC) tSC
     Set tPatientData(1) = "https://hospital.example/mrn|"_pRequest.PatientIdentifier
@@ -397,6 +401,8 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set tURL = tURL_"/"_tID
 
     Set tPutRequest = ##class(%Net.HttpRequest).%New()
+    Set tPutRequest.Https = 1
+    Set tPutRequest.SSLConfiguration = ..Adapter.SSLConfig
     Set tBody = ##class(%GlobalBinaryStream).%New()
     Do tBody.Write(tEncounter.%ToJSON())
     Do tBody.Rewind()
