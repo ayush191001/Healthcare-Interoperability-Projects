@@ -62,7 +62,7 @@ ClassMethod ParseA03Message(
     }
 
     // Extract PID-3 Patient Identifier
-    Set patientIdentifier = $PIECE(pid, "|", 4)
+    Set patientIdentifier = $PIECE($PIECE(pid, "|", 4), "^", 1)
 
     If patientIdentifier = "" {
         Quit $$$ERROR($$$GeneralError, "PID-3 Patient Identifier is missing")
