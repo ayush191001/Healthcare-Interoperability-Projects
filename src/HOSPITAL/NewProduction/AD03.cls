@@ -123,7 +123,6 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 
         <property name="FHIRResourceLocation" type="%String"/>
 
-        <property name="FHIRResponseBody" type="%String(MAXLEN=32000)"/>
 
     </context>
 
@@ -167,7 +166,6 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
                 <assign property="context.FHIRStatusCode" value="callresponse.FHIRStatusCode"/>
                 <assign property="context.FHIRStatusLine" value="callresponse.FHIRStatusLine"/>
                 <assign property="context.FHIRResourceLocation" value="callresponse.ResourceLocation"/>
-                <assign property="context.FHIRResponseBody" value="callresponse.FHIRResponseBody"/>
             </response>
         </call>
 
