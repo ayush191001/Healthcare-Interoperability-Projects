@@ -104,9 +104,11 @@ ClassMethod ParseA08Message(
     If gender = "U" Set patient.gender = "unknown"
 
     Set updateRequest = ##class(HOSPITAL.NewProduction.FHIRPatientUpdateRequest).%New()
+    Set updateRequest.PatientIdentifier = patientIdentifier
+    Set updateRequest.MessageControlID = messageControlID
     Set updateRequest.PatientJSON = patient.%ToJSON()
 
-    Quit $$$OK
+    Quit $$OK
 }
 
 XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
@@ -121,6 +123,11 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
         <property name="MessageControlID" type="%String"/>
         <property name="FHIRStatusCode" type="%Integer"/>
         <property name="FHIRStatusLine" type="%String"/>
+        <property name="PatientJSON" type="%String">
+            <parameters>
+                <parameter name="MAXLEN" value="32000"/>
+            </parameters>
+        </property>
         <property name="FHIRResourceLocation" type="%String">
             <parameters>
                 <parameter name="MAXLEN" value="2048"/>
@@ -139,8 +146,9 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
                     SET status = tSC
                     QUIT
                 }
-                SET context.PatientIdentifier = $PIECE($PIECE(updateRequest.PatientJSON, """value"":""", 2), """", 1)
-                SET context.MessageControlID = ""
+                SET context.PatientIdentifier = updateRequest.PatientIdentifier
+                SET context.MessageControlID = updateRequest.MessageControlID
+                SET context.PatientJSON = updateRequest.PatientJSON
             ]]>
         </code>
 
@@ -148,7 +156,7 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 
         <call name="UpdateFHIRPatient" target="FHIRPatientOperation" async="0">
             <request type="HOSPITAL.NewProduction.FHIRPatientUpdateRequest">
-                <assign property="callrequest.PatientJSON" value="updateRequest.PatientJSON"/>
+                <assign property="callrequest.PatientJSON" value="context.PatientJSON"/>
             </request>
             <response type="HOSPITAL.NewProduction.FHIRPatientResponse">
                 <assign property="context.FHIRStatusCode" value="callresponse.FHIRStatusCode"/>
