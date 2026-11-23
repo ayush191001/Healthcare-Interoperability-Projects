@@ -81,10 +81,16 @@ Method UpdatePatient(pRequest As HOSPITAL.NewProduction.FHIRPatientUpdateRequest
     }
     Quit:$$$ISERR(tSC) tSC
 
-    If '$IsObject(tUpdate) || (tUpdate.%Get("resourceType") '= "Patient") {
+    If '$IsObject(tUpdate) {
+        Quit $$$ERROR($$$GeneralError, "A08 update JSON did not produce an object")
+    }
+    If tUpdate.%Get("resourceType") '= "Patient" {
         Quit $$$ERROR($$$GeneralError, "A08 update payload must be a FHIR Patient resource")
     }
-    If '$IsObject(tUpdate.%Get("identifier")) || (tUpdate.identifier.%Size() '= 1) {
+    If '$IsObject(tUpdate.%Get("identifier")) {
+        Quit $$$ERROR($$$GeneralError, "A08 update must contain exactly one MRN identifier")
+    }
+    If tUpdate.identifier.%Size() '= 1 {
         Quit $$$ERROR($$$GeneralError, "A08 update must contain exactly one MRN identifier")
     }
 
@@ -134,7 +140,10 @@ Method UpdatePatient(pRequest As HOSPITAL.NewProduction.FHIRPatientUpdateRequest
         Set tSC = $$$ERROR($$$GeneralError, "FHIR Patient search returned invalid JSON")
     }
     Quit:$$$ISERR(tSC) tSC
-    If '$IsObject(tBundle) || (tBundle.%Get("resourceType") '= "Bundle") {
+    If '$IsObject(tBundle) {
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search returned no JSON object")
+    }
+    If tBundle.%Get("resourceType") '= "Bundle" {
         Quit $$$ERROR($$$GeneralError, "FHIR Patient search did not return a Bundle")
     }
 
@@ -151,7 +160,10 @@ Method UpdatePatient(pRequest As HOSPITAL.NewProduction.FHIRPatientUpdateRequest
     }
 
     Set tEntry = tBundle.entry.%Get(0)
-    If '$IsObject(tEntry) || '$IsObject(tEntry.%Get("resource")) {
+    If '$IsObject(tEntry) {
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search result entry is invalid")
+    }
+    If '$IsObject(tEntry.%Get("resource")) {
         Quit $$$ERROR($$$GeneralError, "FHIR Patient search result has no resource")
     }
     Set tPatient = tEntry.resource
