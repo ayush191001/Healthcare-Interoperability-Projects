@@ -35,6 +35,15 @@ XData RuleDefinition [ XMLNamespace = "http://www.intersystems.com/rule" ]
 </when>
 </rule>
 
+<!-- Route ADT A08 patient demographic updates to the A08 workflow. -->
+<rule name="RouteADT_A08">
+<constraint name="source" value="ADT_TCP_Service"></constraint>
+<constraint name="docName" value="ADT_A08"></constraint>
+<when condition="1" comment="Process ADT A08 patient updates">
+<send transform="" target="HOSPITAL.NewProduction.AD08"></send>
+</when>
+</rule>
+
 </ruleSet>
 </ruleDefinition>
 }
