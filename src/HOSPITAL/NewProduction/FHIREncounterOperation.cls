@@ -185,27 +185,24 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
 
     // Search by both the hospital visit identifier and the Patient identifier.
     Set tHttpRequest = ##class(%Net.HttpRequest).%New()
+    Set tHttpRequest.Server = ..Adapter.HTTPServer
+    Set tHttpRequest.Port = ..Adapter.HTTPPort
     Set tHttpRequest.Https = 1
     Set tHttpRequest.SSLConfiguration = ..Adapter.SSLConfig
     Set tSC = tHttpRequest.SetHeader("Accept", "application/fhir+json")
-    Quit:$$$ISERR(tSC) tSC
+    Quit:$$ISERR(tSC) tSC
 
-    Set tData(1) = "https://hospital.example/visit-number|"_pRequest.VisitNumber
-    Set tData(2) = "https://hospital.example/mrn|"_pRequest.PatientIdentifier
-    Set tData(3) = "2"
-
-    Set tSC = ..Adapter.SendFormDataArray(
-        .tHttpResponse,
-        "GET",
-        tHttpRequest,
-        "identifier,patient.identifier,_count",
-        .tData,
-        ..Adapter.URL
-    )
-    Quit:$$$ISERR(tSC) tSC
+    // Use the same direct GET request pattern verified successfully from IRIS.
+    // Keep the FHIR token separators in the identifier values unchanged.
+    Set tURL = ..Adapter.URL_"?identifier=https://hospital.example/visit-number|"_pRequest.VisitNumber
+    Set tURL = tURL_"&patient.identifier=https://hospital.example/mrn|"_pRequest.PatientIdentifier
+    Set tURL = tURL_"&_count=2"
+    Set tSC = tHttpRequest.Get(tURL)
+    Quit:$$ISERR(tSC) tSC
+    Set tHttpResponse = tHttpRequest.HttpResponse
 
     If '$IsObject(tHttpResponse) {
-        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search returned no HTTP response")
+        Quit $$ERROR($$GeneralError, "FHIR Encounter search returned no HTTP response")
     }
 
     Set pResponse.FHIRStatusCode = tHttpResponse.StatusCode
@@ -290,23 +287,18 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set tPatientURL = $EXTRACT(tEncounterURL,1,$LENGTH(tEncounterURL)-$LENGTH("/Encounter"))_"/Patient"
 
     Set tPatientRequest = ##class(%Net.HttpRequest).%New()
+    Set tPatientRequest.Server = ..Adapter.HTTPServer
+    Set tPatientRequest.Port = ..Adapter.HTTPPort
     Set tPatientRequest.Https = 1
     Set tPatientRequest.SSLConfiguration = ..Adapter.SSLConfig
     Set tSC = tPatientRequest.SetHeader("Accept", "application/fhir+json")
-    Quit:$$$ISERR(tSC) tSC
-    Set tPatientData(1) = "https://hospital.example/mrn|"_pRequest.PatientIdentifier
-    Set tPatientData(2) = "2"
-    Set tSC = ..Adapter.SendFormDataArray(
-        .tPatientResponse,
-        "GET",
-        tPatientRequest,
-        "identifier,_count",
-        .tPatientData,
-        tPatientURL
-    )
-    Quit:$$$ISERR(tSC) tSC
+    Quit:$$ISERR(tSC) tSC
+    Set tPatientURL = tPatientURL_"?identifier=https://hospital.example/mrn|"_pRequest.PatientIdentifier_"&_count=2"
+    Set tSC = tPatientRequest.Get(tPatientURL)
+    Quit:$$ISERR(tSC) tSC
+    Set tPatientResponse = tPatientRequest.HttpResponse
     If '$IsObject(tPatientResponse) {
-        Quit $$$ERROR($$$GeneralError, "FHIR Patient search returned no HTTP response")
+        Quit $$ERROR($$GeneralError, "FHIR Patient search returned no HTTP response")
     }
     If (tPatientResponse.StatusCode < 200) || (tPatientResponse.StatusCode > 299) {
         Quit $$$ERROR($$$GeneralError, "FHIR Patient search failed: HTTP "_tPatientResponse.StatusCode_" "_tPatientResponse.StatusLine)
