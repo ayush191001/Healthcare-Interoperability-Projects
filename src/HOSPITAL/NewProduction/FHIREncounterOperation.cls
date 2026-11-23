@@ -190,7 +190,7 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set tHttpRequest.Https = 1
     Set tHttpRequest.SSLConfiguration = ..Adapter.SSLConfig
     Set tSC = tHttpRequest.SetHeader("Accept", "application/fhir+json")
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
 
     // Use the same direct GET request pattern verified successfully from IRIS.
     // Keep the FHIR token separators in the identifier values unchanged.
@@ -198,11 +198,11 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set tURL = tURL_"&patient.identifier=https://hospital.example/mrn|"_pRequest.PatientIdentifier
     Set tURL = tURL_"&_count=2"
     Set tSC = tHttpRequest.Get(tURL)
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
     Set tHttpResponse = tHttpRequest.HttpResponse
 
     If '$IsObject(tHttpResponse) {
-        Quit $$ERROR($$GeneralError, "FHIR Encounter search returned no HTTP response")
+        Quit $$$ERROR($$$GeneralError, "FHIR Encounter search returned no HTTP response")
     }
 
     Set pResponse.FHIRStatusCode = tHttpResponse.StatusCode
@@ -292,13 +292,13 @@ Method DischargeEncounter(pRequest As HOSPITAL.NewProduction.FHIRDischargeReques
     Set tPatientRequest.Https = 1
     Set tPatientRequest.SSLConfiguration = ..Adapter.SSLConfig
     Set tSC = tPatientRequest.SetHeader("Accept", "application/fhir+json")
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
     Set tPatientURL = tPatientURL_"?identifier=https://hospital.example/mrn|"_pRequest.PatientIdentifier_"&_count=2"
     Set tSC = tPatientRequest.Get(tPatientURL)
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
     Set tPatientResponse = tPatientRequest.HttpResponse
     If '$IsObject(tPatientResponse) {
-        Quit $$ERROR($$GeneralError, "FHIR Patient search returned no HTTP response")
+        Quit $$$ERROR($$$GeneralError, "FHIR Patient search returned no HTTP response")
     }
     If (tPatientResponse.StatusCode < 200) || (tPatientResponse.StatusCode > 299) {
         Quit $$$ERROR($$$GeneralError, "FHIR Patient search failed: HTTP "_tPatientResponse.StatusCode_" "_tPatientResponse.StatusLine)
