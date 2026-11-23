@@ -108,7 +108,7 @@ ClassMethod ParseA08Message(
     Set updateRequest.MessageControlID = messageControlID
     Set updateRequest.PatientJSON = patient.%ToJSON()
 
-    Quit $$OK
+    Quit $$$OK
 }
 
 XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
