@@ -123,7 +123,7 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 
         <property name="FHIRResourceLocation" type="%String"/>
 
-        <property name="FHIRResponseBody" type="%String"/>
+        <property name="FHIRResponseBody" type="%String(MAXLEN=32000)"/>
 
     </context>
 
