@@ -5,10 +5,10 @@ Class HOSPITAL.NewProduction.AD01 Extends Ens.BusinessProcessBPL [ ClassType = p
 ClassMethod ValidateA01Message(message As EnsLib.HL7.Message, Output patientJSON As %String, Output sendingApplication As %String, Output sendingFacility As %String, Output messageControlID As %String, Output messageType As %String) As %Status
 {
     ; Convert the parsed HL7 message object to text
-    SET tSC = $$$$OK
+    SET tSC = $$OK
     SET hl7Text = message.OutputToString("", "", .tSC, "")
 
-    QUIT:$$$$ISERR(tSC) tSC
+    QUIT:$$ISERR(tSC) tSC
 
     ; Extract the sender identity from MSH before registering the message.
     SET hl7Text = $REPLACE(hl7Text,$CHAR(13,10),$CHAR(13))
@@ -21,12 +21,12 @@ ClassMethod ValidateA01Message(message As EnsLib.HL7.Message, Output patientJSON
     ; Reuse the existing validation and FHIR mapping
     SET tSC = ..ValidateA01(hl7Text, .patientResource)
 
-    QUIT:$$$$ISERR(tSC) tSC
+    QUIT:$$ISERR(tSC) tSC
 
     ; Convert the FHIR Patient object to JSON
     SET patientJSON = patientResource.%ToJSON()
 
-    QUIT $$$$OK
+    QUIT $$OK
 }
 
 ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject) As %Status
@@ -68,7 +68,7 @@ ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject
     
     IF messageType="" {
         WRITE !,"ERROR: Message Type is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Message Type is missing")
+        QUIT $$ERROR($$GeneralError,"Message Type is missing")
     }
     
     SET sendingApplication = $PIECE(msh,"|",3)
@@ -86,7 +86,7 @@ ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject
 
     IF messageControlID="" {
         WRITE !,"ERROR: Message Control ID is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Message Control ID is missing")
+        QUIT $$ERROR($$GeneralError,"Message Control ID is missing")
     }
     
     ; -----------------------------
@@ -100,22 +100,22 @@ ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject
     
     IF patientID="" {
         WRITE !,"ERROR: Patient ID is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Patient ID is missing")
+        QUIT $$ERROR($$GeneralError,"Patient ID is missing")
     }
     
     IF patientName="" {
         WRITE !,"ERROR: Patient Name is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Patient Name is missing")
+        QUIT $$ERROR($$GeneralError,"Patient Name is missing")
     }
     
     IF dob="" {
         WRITE !,"ERROR: Date of Birth is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Date of Birth is missing")
+        QUIT $$ERROR($$GeneralError,"Date of Birth is missing")
     }
     
     IF gender="" {
         WRITE !,"ERROR: Gender is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Gender is missing")
+        QUIT $$ERROR($$GeneralError,"Gender is missing")
     }
     
     ; -----------------------------
@@ -128,17 +128,17 @@ ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject
     
     IF patientClass="" {
         WRITE !,"ERROR: Patient Class is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Patient Class is missing")
+        QUIT $$ERROR($$GeneralError,"Patient Class is missing")
     }
     
     IF location="" {
         WRITE !,"ERROR: Patient Location is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Patient Location is missing")
+        QUIT $$ERROR($$GeneralError,"Patient Location is missing")
     }
     
     IF attendingDoctor="" {
         WRITE !,"ERROR: Attending Doctor is missing"
-        QUIT $$$$ERROR($$$$GeneralError,"Attending Doctor is missing")
+        QUIT $$ERROR($$GeneralError,"Attending Doctor is missing")
     }
     
     WRITE !,"ADT A01 validation successful"
@@ -152,7 +152,7 @@ ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject
     WRITE !,"Attending Doctor: ",attendingDoctor
     
     Set patientResource = ..BuildPatient(pid)
-    QUIT $$$$OK
+    QUIT $$OK
 }
 
 ClassMethod BuildPatient(pid As %String) As %DynamicObject
@@ -243,7 +243,7 @@ ClassMethod BuildEncounter(hl7 As %String, patientLocation As %String, Output en
     }
 
     IF pv1="" {
-        QUIT $$$$ERROR($$$$GeneralError,"PV1 segment is missing")
+        QUIT $$ERROR($$GeneralError,"PV1 segment is missing")
     }
 
     // Extract PV1 fields
@@ -253,15 +253,15 @@ ClassMethod BuildEncounter(hl7 As %String, patientLocation As %String, Output en
     SET visitNumber = $PIECE(pv1,"|",20)
 
     IF visitNumber="" {
-        QUIT $$$$ERROR($$$$GeneralError,"PV1-19 visit number is missing")
+        QUIT $$ERROR($$GeneralError,"PV1-19 visit number is missing")
     }
 
     IF locationCode="" {
-        QUIT $$$$ERROR($$$$GeneralError,"PV1-3 patient location is missing")
+        QUIT $$ERROR($$GeneralError,"PV1-3 patient location is missing")
     }
 
     IF attendingDoctor="" {
-        QUIT $$$$ERROR($$$$GeneralError,"PV1-7 attending doctor is missing")
+        QUIT $$ERROR($$GeneralError,"PV1-7 attending doctor is missing")
     }
 
     // Extract the logical Patient ID from the returned Location URL
@@ -272,7 +272,7 @@ ClassMethod BuildEncounter(hl7 As %String, patientLocation As %String, Output en
     )
 
     IF patientFHIRID="" {
-        QUIT $$$$ERROR($$$$GeneralError,"FHIR Patient ID could not be extracted from Location")
+        QUIT $$ERROR($$GeneralError,"FHIR Patient ID could not be extracted from Location")
     }
 
     // Map the HL7 patient class to FHIR Encounter.class
@@ -289,7 +289,7 @@ ClassMethod BuildEncounter(hl7 As %String, patientLocation As %String, Output en
         SET classDisplay = "emergency"
     }
     ELSE {
-        QUIT $$$$ERROR($$$$GeneralError,"Unsupported PV1-2 patient class")
+        QUIT $$ERROR($$GeneralError,"Unsupported PV1-2 patient class")
     }
 
     // Create Encounter
@@ -355,22 +355,22 @@ ClassMethod BuildEncounter(hl7 As %String, patientLocation As %String, Output en
     DO participants.%Push(participant)
     SET encounterResource.participant = participants
 
-    QUIT $$$$OK
+    QUIT $$OK
 }
 
 ClassMethod BuildEncounterFromMessage(message As EnsLib.HL7.Message, patientLocation As %String, Output encounterJSON As %String) As %Status
 {
-    Set tSC = $$$$OK
+    Set tSC = $$OK
 
     Set hl7Text = message.OutputToString("", "", .tSC, "")
-    Quit:$$$$ISERR(tSC) tSC
+    Quit:$$ISERR(tSC) tSC
 
     Set tSC = ..BuildEncounter(hl7Text, patientLocation, .encounterResource)
-    Quit:$$$$ISERR(tSC) tSC
+    Quit:$$ISERR(tSC) tSC
 
     Set encounterJSON = encounterResource.%ToJSON()
 
-    Quit $$$$OK
+    Quit $$OK
 }
 
 /// BPL Definition
@@ -462,12 +462,12 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 <code name="BuildFHIREncounter">
         <![CDATA[
             IF context.FHIRResourceLocation = "" {
-                SET status = $$$$ERROR($$$$GeneralError,"Patient FHIR Location is missing; cannot link Encounter")
+                SET status = $$ERROR($$GeneralError,"Patient FHIR Location is missing; cannot link Encounter")
                 QUIT
             }
 
             SET tSC = ##class(HOSPITAL.NewProduction.AD01).BuildEncounterFromMessage(request,context.FHIRResourceLocation,.encounterJSON )
-            IF $$$$ISERR(tSC) {
+            IF $$ISERR(tSC) {
                 SET status = tSC
                 QUIT
             }
@@ -494,7 +494,7 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
                 <code name="MarkA01Completed">
                     <![CDATA[
                         SET tSC = ##class(HOSPITAL.NewProduction.MessageRegistry).CompleteMessage(context.RegistryID)
-                        IF $$$$ISERR(tSC) {
+                        IF $$ISERR(tSC) {
                             SET status = tSC
                             QUIT
                         }
