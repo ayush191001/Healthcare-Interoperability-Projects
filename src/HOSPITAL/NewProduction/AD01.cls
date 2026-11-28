@@ -2,13 +2,21 @@
 Class HOSPITAL.NewProduction.AD01 Extends Ens.BusinessProcessBPL [ ClassType = persistent, ProcedureBlock ]
 {
 
-ClassMethod ValidateA01Message(message As EnsLib.HL7.Message, Output patientJSON As %String) As %Status
+ClassMethod ValidateA01Message(message As EnsLib.HL7.Message, Output patientJSON As %String, Output sendingApplication As %String, Output sendingFacility As %String, Output messageControlID As %String, Output messageType As %String) As %Status
 {
     ; Convert the parsed HL7 message object to text
     SET tSC = $$$OK
     SET hl7Text = message.OutputToString("", "", .tSC, "")
 
     QUIT:$$$ISERR(tSC) tSC
+
+    ; Extract the sender identity from MSH before registering the message.
+    SET hl7Text = $REPLACE(hl7Text,$CHAR(13,10),$CHAR(13))
+    SET msh = $PIECE(hl7Text,$CHAR(13),1)
+    SET sendingApplication = $PIECE(msh,"|",3)
+    SET sendingFacility = $PIECE(msh,"|",4)
+    SET messageType = $PIECE(msh,"|",9)
+    SET messageControlID = $PIECE(msh,"|",10)
 
     ; Reuse the existing validation and FHIR mapping
     SET tSC = ..ValidateA01(hl7Text, .patientResource)
@@ -40,6 +48,19 @@ ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject
         QUIT $$$ERROR($$$GeneralError,"Message Type is missing")
     }
     
+    SET sendingApplication = $PIECE(msh,"|",3)
+    SET sendingFacility = $PIECE(msh,"|",4)
+
+    IF sendingApplication="" {
+        WRITE !,"ERROR: Sending Application (MSH-3) is missing"
+        QUIT $$ERROR($$GeneralError,"Sending Application (MSH-3) is missing")
+    }
+
+    IF sendingFacility="" {
+        WRITE !,"ERROR: Sending Facility (MSH-4) is missing"
+        QUIT $$ERROR($$GeneralError,"Sending Facility (MSH-4) is missing")
+    }
+
     IF messageControlID="" {
         WRITE !,"ERROR: Message Control ID is missing"
         QUIT $$$ERROR($$$GeneralError,"Message Control ID is missing")
@@ -334,6 +355,10 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 {
 <process language='objectscript' request='EnsLib.HL7.Message' response='Ens.Response' height='2000' width='2000' >
      <context>
+        <property name="RegistryID" type="%String"/>
+        <property name="IsDuplicate" type="%Boolean"/>
+        <property name="DuplicateStatus" type="%String"/>
+
         <property name="FHIRPatientJSON" type="%String">
             <parameters>
                 <parameter name="MAXLEN" value="32000"/>
@@ -376,15 +401,27 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 <sequence xend='300' yend='450'>
 <code name='ValidateAndBuildFHIRPatient'>
  <![CDATA[
-     SET tSC = ##class(HOSPITAL.NewProduction.AD01).ValidateA01Message(request, .patientJSON)
-         IF $$$ISERR(tSC) {
+     SET tSC = ##class(HOSPITAL.NewProduction.AD01).ValidateA01Message(request, .patientJSON, .sendingApplication, .sendingFacility, .messageControlID, .messageType)
+         IF $$ISERR(tSC) {
              SET status = tSC
-                 QUIT
-             }
+             QUIT
+         }
         SET context.FHIRPatientJSON = patientJSON
+        SET tSC = ##class(HOSPITAL.NewProduction.MessageRegistry).ClaimMessage(sendingApplication,sendingFacility,messageControlID,messageType,.registryID,.isDuplicate,.existingStatus)
+        IF $$ISERR(tSC) {
+            SET status = tSC
+            QUIT
+        }
+        SET context.RegistryID = registryID
+        SET context.IsDuplicate = isDuplicate
+        SET context.DuplicateStatus = existingStatus
  ]]>
  </code>
 
+<if condition='context.IsDuplicate=0'>
+    <true>
+        <scope>
+            <sequence>
 <trace value='"FHIR Patient JSON generated; length="_$LENGTH(context.FHIRPatientJSON)'/>
 
 <call name="PostFHIRPatient" target="FHIRPatientOperation" async="0">
@@ -430,6 +467,37 @@ XData BPL [ XMLNamespace = "http://www.intersystems.com/bpl" ]
 </call>
 <trace value='"FHIR Encounter POST returned HTTP "_context.EncounterStatusCode_"; Location="_context.EncounterResourceLocation'/>
 
+
+                <code name="MarkA01Completed">
+                    <![CDATA[
+                        SET tSC = ##class(HOSPITAL.NewProduction.MessageRegistry).CompleteMessage(context.RegistryID)
+                        IF $$$ISERR(tSC) {
+                            SET status = tSC
+                            QUIT
+                        }
+                    ]]>
+                </code>
+                <trace value='"A01 message registry marked COMPLETED; ID="_context.RegistryID'/>
+            </sequence>
+            <faulthandlers>
+                <catchall>
+                    <code name="MarkA01Failed">
+                        <![CDATA[
+                            SET tError = ..%Context.%LastError
+                            SET tErrorText = $System.Status.GetOneStatusText(tError)
+                            SET tSC = ##class(HOSPITAL.NewProduction.MessageRegistry).FailMessage(context.RegistryID,tErrorText)
+                            SET status = tError
+                        ]]>
+                    </code>
+                    <trace value='"A01 processing failed; registry ID="_context.RegistryID_" error="_$System.Status.GetOneStatusText(..%Context.%LastError)'/>
+                </catchall>
+            </faulthandlers>
+        </scope>
+    </true>
+    <false>
+        <trace value='"Duplicate A01 ignored; registry ID="_context.RegistryID_" existing status="_context.DuplicateStatus'/>
+    </false>
+</if>
 </sequence>
 </process>
 }
