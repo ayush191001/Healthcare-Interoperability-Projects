@@ -38,6 +38,76 @@ Property ErrorDetails As %String(MAXLEN = 4000);
 /// One inbound message is uniquely identified by sender application, sender facility and MSH-10.
 Index MessageIdentity On (SendingApplication, SendingFacility, MessageControlID) [ Unique ];
 
+
+/// Atomically claim a message identity. The unique index arbitrates concurrent deliveries.
+ClassMethod ClaimMessage(pSendingApplication As %String, pSendingFacility As %String, pMessageControlID As %String, pMessageType As %String, Output pRegistryID As %String, Output pIsDuplicate As %Boolean, Output pExistingStatus As %String) As %Status
+{
+    Set pRegistryID = ""
+    Set pIsDuplicate = 0
+    Set pExistingStatus = ""
+    If (pSendingApplication = "") || (pSendingFacility = "") || (pMessageControlID = "") {
+        Quit $$ERROR($$GeneralError, "Sending application, sending facility and message control ID are required")
+    }
+
+    Set tNow = $REPLACE($ZDATETIME($HOROLOG,3,1)," ","T")
+    Set tRegistry = ..%New()
+    Set tRegistry.SendingApplication = pSendingApplication
+    Set tRegistry.SendingFacility = pSendingFacility
+    Set tRegistry.MessageControlID = pMessageControlID
+    Set tRegistry.MessageType = pMessageType
+    Set tRegistry.ProcessingStatus = "PROCESSING"
+    Set tRegistry.ReceivedAt = tNow
+    Set tRegistry.StartedAt = tNow
+    Set tRegistry.LastUpdatedAt = tNow
+    Set tRegistry.AttemptCount = 1
+    Set tSC = tRegistry.%Save()
+    If $$ISOK(tSC) {
+        Set pRegistryID = tRegistry.%Id()
+        Quit $$OK
+    }
+
+    // A failed insert may be a duplicate-key race. Confirm by the full identity.
+    Set tStatement = ##class(%SQL.Statement).%New()
+    Set tSC = tStatement.%Prepare("SELECT ID, ProcessingStatus FROM HOSPITAL_NewProduction.MessageRegistry WHERE SendingApplication = ? AND SendingFacility = ? AND MessageControlID = ?")
+    Quit:$$ISERR(tSC) tSC
+    Set tResult = tStatement.%Execute(pSendingApplication,pSendingFacility,pMessageControlID)
+    If tResult.%Next() {
+        Set pRegistryID = tResult.%Get("ID")
+        Set pExistingStatus = tResult.%Get("ProcessingStatus")
+        Set pIsDuplicate = 1
+        Quit $$OK
+    }
+    Quit tSC
+}
+
+/// Mark a claimed message complete only after all downstream work succeeds.
+ClassMethod CompleteMessage(pRegistryID As %String) As %Status
+{
+    Set tRegistry = ..%OpenId(pRegistryID)
+    If '$IsObject(tRegistry) {
+        Quit $$ERROR($$GeneralError, "Message registry record not found")
+    }
+    Set tNow = $REPLACE($ZDATETIME($HOROLOG,3,1)," ","T")
+    Set tRegistry.ProcessingStatus = "COMPLETED"
+    Set tRegistry.CompletedAt = tNow
+    Set tRegistry.LastUpdatedAt = tNow
+    Quit tRegistry.%Save()
+}
+
+/// Record a failed processing attempt for operational review.
+ClassMethod FailMessage(pRegistryID As %String, pErrorDetails As %String) As %Status
+{
+    If pRegistryID = "" Quit $$OK
+    Set tRegistry = ..%OpenId(pRegistryID)
+    If '$IsObject(tRegistry) {
+        Quit $$ERROR($$GeneralError, "Message registry record not found while recording failure")
+    }
+    Set tRegistry.ProcessingStatus = "FAILED"
+    Set tRegistry.ErrorDetails = $EXTRACT(pErrorDetails,1,4000)
+    Set tRegistry.LastUpdatedAt = $REPLACE($ZDATETIME($HOROLOG,3,1)," ","T")
+    Quit tRegistry.%Save()
+}
+
 Storage Default
 {
 <Type>%Storage.Persistent</Type>
