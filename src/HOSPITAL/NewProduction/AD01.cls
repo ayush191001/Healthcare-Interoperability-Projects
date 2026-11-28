@@ -32,9 +32,32 @@ ClassMethod ValidateA01Message(message As EnsLib.HL7.Message, Output patientJSON
 ClassMethod ValidateA01(hl7 As %String, Output patientResource As %DynamicObject) As %Status
 {
   
-    SET msh = $PIECE(hl7,$CHAR(13),1)
-    SET pid = $PIECE(hl7,$CHAR(13),3)
-    SET pv1 = $PIECE(hl7,$CHAR(13),4)
+    ; Locate segments by name; HL7 segment order must not be assumed.
+    SET hl7 = $REPLACE(hl7,$CHAR(13,10),$CHAR(13))
+    SET msh = ""
+    SET pid = ""
+    SET pv1 = ""
+
+    FOR i = 1:1:$LENGTH(hl7,$CHAR(13)) {
+        SET segment = $PIECE(hl7,$CHAR(13),i)
+        SET segmentName = $PIECE(segment,"|",1)
+
+        IF segmentName="MSH" SET msh = segment
+        IF segmentName="PID" SET pid = segment
+        IF segmentName="PV1" SET pv1 = segment
+    }
+
+    IF msh="" {
+        QUIT $$ERROR($$GeneralError,"MSH segment is missing")
+    }
+
+    IF pid="" {
+        QUIT $$ERROR($$GeneralError,"PID segment is missing")
+    }
+
+    IF pv1="" {
+        QUIT $$ERROR($$GeneralError,"PV1 segment is missing")
+    }
     
     ; -----------------------------
     ; MSH validation
