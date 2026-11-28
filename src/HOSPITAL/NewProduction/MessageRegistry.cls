@@ -46,7 +46,7 @@ ClassMethod ClaimMessage(pSendingApplication As %String, pSendingFacility As %St
     Set pIsDuplicate = 0
     Set pExistingStatus = ""
     If (pSendingApplication = "") || (pSendingFacility = "") || (pMessageControlID = "") {
-        Quit $$ERROR($$GeneralError, "Sending application, sending facility and message control ID are required")
+        Quit $$$ERROR($$$GeneralError, "Sending application, sending facility and message control ID are required")
     }
 
     Set tNow = $REPLACE($ZDATETIME($HOROLOG,3,1)," ","T")
@@ -61,21 +61,21 @@ ClassMethod ClaimMessage(pSendingApplication As %String, pSendingFacility As %St
     Set tRegistry.LastUpdatedAt = tNow
     Set tRegistry.AttemptCount = 1
     Set tSC = tRegistry.%Save()
-    If $$ISOK(tSC) {
+    If $$$ISOK(tSC) {
         Set pRegistryID = tRegistry.%Id()
-        Quit $$OK
+        Quit $$$OK
     }
 
     // A failed insert may be a duplicate-key race. Confirm by the full identity.
     Set tStatement = ##class(%SQL.Statement).%New()
     Set tSC = tStatement.%Prepare("SELECT ID, ProcessingStatus FROM HOSPITAL_NewProduction.MessageRegistry WHERE SendingApplication = ? AND SendingFacility = ? AND MessageControlID = ?")
-    Quit:$$ISERR(tSC) tSC
+    Quit:$$$ISERR(tSC) tSC
     Set tResult = tStatement.%Execute(pSendingApplication,pSendingFacility,pMessageControlID)
     If tResult.%Next() {
         Set pRegistryID = tResult.%Get("ID")
         Set pExistingStatus = tResult.%Get("ProcessingStatus")
         Set pIsDuplicate = 1
-        Quit $$OK
+        Quit $$$OK
     }
     Quit tSC
 }
@@ -85,7 +85,7 @@ ClassMethod CompleteMessage(pRegistryID As %String) As %Status
 {
     Set tRegistry = ..%OpenId(pRegistryID)
     If '$IsObject(tRegistry) {
-        Quit $$ERROR($$GeneralError, "Message registry record not found")
+        Quit $$$ERROR($$$GeneralError, "Message registry record not found")
     }
     Set tNow = $REPLACE($ZDATETIME($HOROLOG,3,1)," ","T")
     Set tRegistry.ProcessingStatus = "COMPLETED"
@@ -97,10 +97,10 @@ ClassMethod CompleteMessage(pRegistryID As %String) As %Status
 /// Record a failed processing attempt for operational review.
 ClassMethod FailMessage(pRegistryID As %String, pErrorDetails As %String) As %Status
 {
-    If pRegistryID = "" Quit $$OK
+    If pRegistryID = "" Quit $$$OK
     Set tRegistry = ..%OpenId(pRegistryID)
     If '$IsObject(tRegistry) {
-        Quit $$ERROR($$GeneralError, "Message registry record not found while recording failure")
+        Quit $$$ERROR($$$GeneralError, "Message registry record not found while recording failure")
     }
     Set tRegistry.ProcessingStatus = "FAILED"
     Set tRegistry.ErrorDetails = $EXTRACT(pErrorDetails,1,4000)
